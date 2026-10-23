@@ -7,26 +7,19 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
-    <header class="header">
+  <div class="chat-container">
+    <header>
       <h1>🤖 AgenticPay AI</h1>
       <p>Autonomous AI Shopping & Instant PayPal Checkout</p>
     </header>
-
-    <main class="chat-wrapper">
-      <div id="chat-box" class="chat-box">
-        <div class="message agent">
-          Hello! Tell me what product or technical service you need today.
-        </div>
-      </div>
-
-      <div class="input-bar">
-        <input type="text" id="user-input" placeholder="e.g., I need AI API credits..." />
-        <button id="send-btn">Send</button>
-      </div>
-    </main>
+    <div id="chat-messages" class="chat-messages">
+      <div class="message assistant">Hello! Tell me what product or technical service you need today.</div>
+    </div>
+    <form id="chat-form" class="chat-form">
+      <input type="text" id="chat-input" placeholder="e.g., I need AI API credits..." required />
+      <button type="submit">Send</button>
+    </form>
   </div>
-
   <script src="app.js"></script>
 </body>
 </html>

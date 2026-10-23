@@ -1,91 +1,99 @@
-const chatBox = document.getElementById('chat-box');
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
+document.addEventListener('DOMContentLoaded', () => {
+  const chatForm = document.getElementById('chat-form');
+  const chatInput = document.getElementById('chat-input');
+  const chatMessages = document.getElementById('chat-messages');
 
-sendBtn.addEventListener('click', sendMessage);
-userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message) return;
 
-async function sendMessage() {
-  const text = userInput.value.trim();
-  if (!text) return;
+    appendMessage(message, 'user');
+    chatInput.value = '';
 
-  appendMessage(text, 'user');
-  userInput.value = '';
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
 
-  try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    });
-    const data = await response.json();
+      const data = await response.json();
+      appendMessage(data.reply, 'assistant');
 
-    appendMessage(data.reply, 'agent');
-
-    if (data.item) {
-      renderPayPalCard(data.item, data.paypalClientId);
+      if (data.item) {
+        renderPayPalCard(data.item, data.clientId);
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      appendMessage('Sorry, something went wrong processing your request.', 'assistant');
     }
-  } catch (err) {
-    appendMessage("Error connecting to backend server.", 'agent');
+  });
+
+  function appendMessage(text, sender) {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', sender);
+    msgDiv.textContent = text;
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-}
 
-function appendMessage(text, sender) {
-  const msg = document.createElement('div');
-  msg.classList.add('message', sender);
-  msg.innerText = text;
-  chatBox.appendChild(msg);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
+  function renderPayPalCard(item, clientId) {
+    const card = document.createElement('div');
+    card.classList.add('product-card');
+    
+    const buttonContainerId = `paypal-container-${Date.now()}`;
+    const currencyCode = item.currency || 'USD';
+    
+    card.innerHTML = `
+      <h3>${item.name}</h3>
+      <p class="price">Price: $${item.price} ${currencyCode}</p>
+      <div id="${buttonContainerId}"></div>
+    `;
+    chatMessages.appendChild(card);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 
-function renderPayPalCard(item, clientId) {
-  const containerId = `paypal-container-${Date.now()}`;
-  const card = document.createElement('div');
-  card.classList.add('offer-card');
-  card.innerHTML = `
-    <h4>${item.name}</h4>
-    <p>Price: $${item.price} USD</p>
-    <div id="${containerId}"></div>
-  `;
-  chatBox.appendChild(card);
-  chatBox.scrollTop = chatBox.scrollHeight;
+    const renderButtons = () => {
+      if (window.paypal) {
+        window.paypal.Buttons({
+          createOrder: (data, actions) => {
+            return actions.order.create({
+              purchase_units: [{
+                description: item.name,
+                amount: {
+                  currency_code: currencyCode,
+                  value: item.price
+                }
+              }]
+            });
+          },
+          onApprove: async (data, actions) => {
+            const details = await actions.order.capture();
+            alert(`Transaction completed by ${details.payer.name.given_name}`);
+          },
+          onError: (err) => {
+            console.error('PayPal Checkout Error:', err);
+          }
+        }).render(`#${buttonContainerId}`);
+      }
+    };
 
-  const renderButtons = () => {
-    const container = document.getElementById(containerId);
-    if (window.paypal && container) {
-      paypal.Buttons({
-        createOrder: async () => {
-          const res = await fetch('/api/create-paypal-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item })
-          });
-          const order = await res.json();
-          return order.id;
-        },
-        onApprove: async (data) => {
-          const res = await fetch('/api/capture-paypal-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderID: data.orderID })
-          });
-          const capture = await res.json();
-          appendMessage(`Payment Successful! Transaction ID: ${capture.id}`, 'agent');
-        }
-      }).render(container);
+    const validClientId = (clientId && !clientId.includes('_here') && clientId.trim() !== '') 
+      ? clientId 
+      : 'test';
+
+    const scriptId = 'paypal-sdk-script';
+    let script = document.getElementById(scriptId);
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = `https://www.paypal.com/sdk/js?client-id=${validClientId}&currency=${currencyCode}`;
+      script.onload = () => renderButtons();
+      script.onerror = () => console.error('Failed to load PayPal SDK script');
+      document.body.appendChild(script);
+    } else {
+      renderButtons();
     }
-  };
-
-  const activeClientId = clientId || 'sb';
-  const existingScript = document.getElementById('paypal-sdk-script');
-
-  if (!existingScript) {
-    const script = document.createElement('script');
-    script.id = 'paypal-sdk-script';
-    script.src = `https://www.paypal.com/sdk/js?client-id=${activeClientId}&currency=USD`;
-    script.onload = renderButtons;
-    document.body.appendChild(script);
-  } else {
-    renderButtons();
   }
-}
+});
