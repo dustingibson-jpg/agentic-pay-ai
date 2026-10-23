@@ -73,20 +73,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderButtons = () => {
       if (window.paypal) {
         window.paypal.Buttons({
-          createOrder: async () => {
-            const response = await fetch('/api/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ item })
+          createOrder: (data, actions) => {
+            return actions.order.create({
+              purchase_units: [{
+                description: item.name,
+                amount: {
+                  currency_code: currencyCode,
+                  value: item.price
+                }
+              }]
             });
-            const orderData = await response.json();
-            return orderData.id;
           },
-          onApprove: async (data) => {
-            const response = await fetch(`/api/orders/${data.orderID}/capture`, {
-              method: 'POST'
-            });
-            const details = await response.json();
+          onApprove: async (data, actions) => {
+            const details = await actions.order.capture();
             card.style.display = 'none';
             appendReceiptCard(details, item.name);
           },
