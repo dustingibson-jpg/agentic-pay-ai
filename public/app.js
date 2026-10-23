@@ -38,6 +38,23 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
+  function appendReceiptCard(details, itemName) {
+    const card = document.createElement('div');
+    card.classList.add('product-card');
+    card.style.borderColor = '#10B981';
+    
+    const payerName = details.payer?.name?.given_name || 'Customer';
+    const captureId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id || 'N/A';
+    
+    card.innerHTML = `
+      <h3 style="color: #10B981; margin-top: 0;">✅ Payment Successful!</h3>
+      <p>Thank you, <strong>${payerName}</strong>! Your checkout for <strong>${itemName}</strong> was completed successfully.</p>
+      <p style="font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0;">Transaction ID: <code>${captureId}</code></p>
+    `;
+    chatMessages.appendChild(card);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
   function renderPayPalCard(item, clientId) {
     const card = document.createElement('div');
     card.classList.add('product-card');
@@ -56,23 +73,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderButtons = () => {
       if (window.paypal) {
         window.paypal.Buttons({
-          createOrder: (data, actions) => {
-            return actions.order.create({
-              purchase_units: [{
-                description: item.name,
-                amount: {
-                  currency_code: currencyCode,
-                  value: item.price
-                }
-              }]
+          createOrder: async () => {
+            const response = await fetch('/api/orders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ item })
             });
+            const orderData = await response.json();
+            return orderData.id;
           },
-          onApprove: async (data, actions) => {
-            const details = await actions.order.capture();
-            alert(`Transaction completed by ${details.payer.name.given_name}`);
+          onApprove: async (data) => {
+            const response = await fetch(`/api/orders/${data.orderID}/capture`, {
+              method: 'POST'
+            });
+            const details = await response.json();
+            card.style.display = 'none';
+            appendReceiptCard(details, item.name);
           },
           onError: (err) => {
             console.error('PayPal Checkout Error:', err);
+            appendMessage('An error occurred during payment. Please try again.', 'assistant');
           }
         }).render(`#${buttonContainerId}`);
       }
